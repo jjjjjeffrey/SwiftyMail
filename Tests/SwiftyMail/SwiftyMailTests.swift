@@ -2,12 +2,23 @@ import XCTest
 @testable import SwiftyMail
 
 class SwiftyMailTests: XCTestCase {
+    
     func testExample() {
         
-        let content = "Date: Mon, 29 Nov 2010 21:54:29 +1100\r\n"+"To: 314099323@qq.com\r\n"+"From: 314099323@qq.com\r\n"+"Cc: jeffreyzeng@me.com\r\n"+"Message-ID: <dcd7cb36-11db-487a-9f3a-e652a9458efd@rfcpedant.example.org>\r\n"+"Subject: SMTP SSL example message\r\n"+"\r\n"+"The body of the message starts here.\r\n"+"\r\n"+"It could be a lot of lines, could be MIME encoded, whatever.\r\n"+"Check RFC5322.\r\n"
+        let sender = SwiftyMail.Sender(server: "smtp.qq.com:465", email: "314099323@qq.com", password: "18616998609b", name: "Jeffrey")
+        let client = SwiftyMail(sender: sender)
         
-        let mail = SwiftyMail(to: "314099323@qq.com", from: "314099323@qq.com", password: "111111111", cc: "jeffreyzeng@me.com", content: content)
-        mail.send()
+        let receiver = SwiftyMail.Receiver(email: "jjjjjeffreyzeng@gmail.com", name: "曾大千")
+        
+        let email = SwiftyMail.EMail(date: Date(), title: "邮件发送测试", content: "Development Snapshots are prebuilt binaries that are automatically created from mainline development branches. These snapshots are not official releases. They have gone through automated unit testing, but they have not gone through the full testing that is performed for official releases.现在我们来重新回顾下前三弹模式匹配的各种语法 第一弹，第二弹，第三弹，第四弹是本系列的最后一篇文章，本章会教大家使用 if case let，for case where 等一些高级语法，让我们拭目以待吧！")
+        
+        do {
+            try client.send(to: receiver, mail: email)
+        } catch let error {
+            print(error)
+        }
+        
+        
     }
 
 

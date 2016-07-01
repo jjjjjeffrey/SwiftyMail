@@ -1,78 +1,101 @@
 import Foundation
+import SwiftCURL
 import CCurl
 
 
-class SwiftyMail {
+public class SwiftyMail {
 
-    var mailTo: String
-    var mailFrom: String
-    var mailFromPassword: String
-    var mailCC: String
-    var mailContent: String
-    
-    var curl = curl_easy_init()
-    var recipients: UnsafeMutablePointer<curl_slist>!
     
     
-    init(to mailTo: String, from: String, password: String, cc: String, content: String) {
-        self.mailTo = mailTo
-        self.mailFrom = from
-        self.mailFromPassword = password
-        self.mailCC = cc
-        self.mailContent = content
+    var sender: Sender
+    
+    public init(sender: Sender) {
+        self.sender = sender
     }
     
-    func send() {
+    public struct Sender {
+        var server: String
+        var email: String
+        var password: String
+        var name: String
+    }
+    
+    public struct Receiver {
+        var email: String
+        var name: String
+    }
+    
+    public struct EMail {
+        var date: Date
+        var title: String
+        var content: String
+    }
+    
+
+    struct MIME {
+        var sender: Sender
+        var receiver: Receiver
+        var email: EMail
         
-        let unsafeSelf = Unmanaged<SwiftyMail>.passUnretained(self).toOpaque()
-        
-        curl_easy_setopt_cstr(curl, CURLOPT_URL, "smtps://smtp.qq.com:465")
-        
-        curl_easy_setopt_int64(curl, CURLOPT_USE_SSL, Int64(CURLUSESSL_ALL.rawValue))
-        curl_easy_setopt_cstr(curl, CURLOPT_USERNAME, self.mailFrom)
-        curl_easy_setopt_cstr(curl, CURLOPT_PASSWORD, self.mailFromPassword)
-        
-        curl_easy_setopt_cstr(curl, CURLOPT_MAIL_FROM, mailFrom)
-        
-        recipients = curl_slist_append(recipients, mailTo)
-        recipients = curl_slist_append(recipients, mailCC)
-        curl_easy_setopt_slist(curl, CURLOPT_MAIL_RCPT, recipients)
-        
-        let payload_source: curl_func = { (ptr, size, num, userp) -> Int in
-            let mySelf = Unmanaged<SwiftyMail>.fromOpaque(userp!).takeUnretainedValue()
-            
-            
-            if let ptr = UnsafeMutablePointer<UInt8>(ptr), let content = UnsafeMutablePointer<UInt8>(mySelf.mailContent.cString(using: NSUTF8StringEncoding)) {
-                
-                ptr.assignFrom(content, count: mySelf.mailContent.characters.count)
-                
+        var data: Data {
+            get {
+                var str = "\(string(from: email.date))\r\n"
+                str += "To: \"\(receiver.name)\" <\(receiver.email)>\r\n"
+                str += "From: \"\(sender.name)\" <\(sender.email)>\r\n"
+                str += "Subject: \(RFC2047String(from: email.title))\r\n"
+                str += "\r\n"
+                str += email.content
+                return str.data(using: .utf8)!
             }
-            return 0
         }
+    }
+
+}
+
+private func string(from date: Date) -> String {
+    let date = Date()
+    let formatter = DateFormatter()
+    formatter.dateFormat = "E, dd MMM yyyy HH:mm:ss Z"
+    formatter.locale = Locale(localeIdentifier: "en_US")
+    return formatter.string(from: date)
+}
+
+private func RFC2047String(from: String) -> String {
+    let data = from.data(using: .utf8)
+    let base64 = data!.base64EncodedString()
+    return "=?UTF-8?B?\(base64)?="
+}
+
+public extension SwiftyMail {
+    func send(to receiver: Receiver, mail: EMail) throws {
+        let curl = cURL()
         
-        
-        curl_easy_setopt_func(curl, CURLOPT_READFUNCTION, payload_source)
-        
-        curl_easy_setopt_void(curl, CURLOPT_READDATA, unsafeSelf)
-        
-        curl_easy_setopt_long(curl, CURLOPT_UPLOAD, 1)
-        
-        let code = curl_easy_perform(curl)
-        if code != CURLE_OK {
-            print("perform error: \(String(validatingUTF8: curl_easy_strerror(code))!)")
+        do {
+            try curl.setOption(option: CURLOPT_URL, "smtps://\(sender.server)")
+            try curl.setOption(option: CURLOPT_USE_SSL, Int(CURLUSESSL_ALL.rawValue))
+            try curl.setOption(option: CURLOPT_USERNAME, sender.email)
+            try curl.setOption(option: CURLOPT_PASSWORD, sender.password)
+            try curl.setOption(option: CURLOPT_MAIL_FROM, "<\(sender.email)>")
+            try curl.setOption(option: CURLOPT_MAIL_RCPT, ["<\(receiver.email)>"])
+            
+            let mime = MIME(sender: sender, receiver: receiver, email: mail)
+            let payloadStorage = cURL.ReadFunctionStorage(data: mime.data)
+            
+            try curl.setOption(option: CURLOPT_READFUNCTION, curlReadFunction)
+            try curl.setOption(option: CURLOPT_READDATA, payloadStorage)
+            
+            try curl.setOption(option: CURLOPT_UPLOAD, 1)
+            
+            try curl.perform()
+        } catch let error {
+            throw error
         }
-        
-        
-        
     }
     
-    func payload(ptr: UnsafeMutablePointer<Void>?, size: Int, num: Int, userp: UnsafeMutablePointer<Void>?) -> Int {
-        if let ptr = UnsafeMutablePointer<UInt8>(ptr), let content = UnsafeMutablePointer<UInt8>(self.mailContent.cString(using: NSUTF8StringEncoding)) {
-            
-            ptr.assignFrom(content, count: self.mailContent.characters.count)
-        }
-        return 0
-    }
+    
 }
+
+
+
 
 
